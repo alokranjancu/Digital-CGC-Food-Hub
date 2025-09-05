@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="hi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>🍽️ Digital CGC Food Hub — Full Demo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <style>
+    body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial}
+    .card { background: white; border-radius: 12px; box-shadow: 0 6px 18px rgba(16,24,40,0.06); }
+    .muted { color:#6b7280 }
+    .item-img{height:140px;background-size:cover;background-position:center;border-radius:8px}
+    #map{height:260px;border-radius:8px}
+    .chat-bubble{background:#f3f4f6;padding:8px;border-radius:8px;margin:6px 0}
+    .carousel { display:flex; overflow:hidden; gap:10px; align-items:center; }
+    .carousel img { width:250px; height:160px; object-fit:cover; border-radius:12px; flex-shrink:0; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+  <div class="max-w-7xl mx-auto p-6">
+    <!-- HEADER -->
+    <header class="flex items-center justify-between mb-6">
+      <div class="flex items-center gap-3">
+        <img id="brandLogo" src="" alt="Logo" class="h-12 w-12 rounded-md shadow-sm hidden">
+        <div>
+          <h1 class="text-2xl font-semibold">Digital CGC Food Hub</h1>
+          <p class="muted text-sm">Multi-shop menus • QR pickup • Live status • Vendor analytics</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="studentBtn" class="px-3 py-2 bg-indigo-600 text-white rounded-md">Student</button>
+        <button id="vendorBtn" class="px-3 py-2 bg-white border rounded-md">Vendor</button>
+        <button id="adminBtn" class="px-3 py-2 bg-white border rounded-md">Admin</button>
+        <button id="uploadLogoBtn" class="px-3 py-2 bg-white border rounded-md">Upload Logo</button>
+        <input type="file" id="logoInput" accept="image/*" class="hidden" />
+      </div>
+    </header>
+
+    <!-- MAIN -->
+    <main id="app">
+      <!-- STUDENT -->
+      <section id="studentView">
+        <div class="grid grid-cols-3 gap-6">
+          <div class="col-span-1 card p-4">
+            <h3 class="font-medium">Shops</h3>
+            <div id="shopFilters" class="mt-3 space-y-3"></div>
+            <div class="mt-4">
+              <input id="searchShop" placeholder="Search shops or items" class="w-full p-2 border rounded-md" />
+            </div>
+          </div>
+
+          <div class="col-span-2">
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-lg font-semibold">Menu <span id="selectedShopName" class="text-sm muted"></span></h2>
+              <div class="flex items-center gap-2">
+                <input id="couponInput" placeholder="Coupon" class="p-2 border rounded-md" />
+                <button id="applyCoupon" class="px-3 py-2 bg-green-600 text-white rounded-md">Apply</button>
+              </div>
+            </div>
+
+            <div id="menuGrid" class="grid grid-cols-3 gap-4"></div>
+
+            <div class="mt-6 card p-4">
+              <h3 class="font-medium">Cart</h3>
+              <div id="cartList" class="mt-2"></div>
+              <div class="flex justify-between mt-4 items-center">
+                <div class="muted">Wallet: ₹<span id="walletBal">0</span></div>
+                <div class="flex gap-2 items-center">
+                  <input id="rechargeAmt" placeholder="₹" class="p-2 border rounded-md w-24" />
+                  <button id="rechargeBtn" class="px-3 py-2 bg-indigo-600 text-white rounded-md">Recharge</button>
+                </div>
+              </div>
+
+              <div class="mt-3 flex gap-3 items-center">
+                <label class="muted">Payment:</label>
+                <select id="paymentMode" class="p-2 border rounded-md">
+                  <option value="wallet">Wallet</option>
+                  <option value="upi">UPI (Scan QR)</option>
+                </select>
+                <div class="flex-1 text-right text-lg">Total: ₹<span id="cartTotal">0</span></div>
+              </div>
+
+              <div class="mt-3 flex justify-end">
+                <button id="placeOrderBtn" class="px-4 py-2 bg-blue-600 text-white rounded-md">Place Order</button>
+              </div>
+              <div class="mt-3 muted text-sm" id="orderStatusMsg"></div>
+            </div>
+
+          </div>
+        </div>
+
+        <div class="mt-6 grid grid-cols-2 gap-6">
+          <div class="card p-4">
+            <h3 class="font-medium">Recent Activity</h3>
+            <div id="activityLog" class="mt-2 muted text-sm"></div>
+          </div>
+
+          <div class="card p-4">
+            <h3 class="font-medium">Queue / Tokens</h3>
+            <div id="queueTokens" class="mt-2 muted text-sm"></div>
+          </div>
+        </div>
+
+        <!-- Gallery slideshow -->
+        <div class="mt-6 card p-4">
+          <h3 class="font-medium">Gallery</h3>
+          <div class="mt-3 flex items-center gap-2">
+            <input type="file" id="galleryUpload" accept="image/*" multiple />
+            <div class="muted text-sm">Upload images to show in student slideshow</div>
+          </div>
+          <div id="galleryCarousel" class="carousel mt-4"></div>
+        </div>
+
+        <!-- Map -->
+        <div class="mt-6 card p-4">
+          <h3 class="font-medium">Delivery Map (Simulated)</h3>
+          <div id="map" class="mt-3"></div>
+          <div class="muted text-sm mt-2">Delivery partner moves when vendor sets order to Out for Pickup.</div>
+        </div>
+
+        <!-- Feedback -->
+        <div class="mt-6 card p-4">
+          <h3 class="font-medium">Feedback</h3>
+          <textarea id="feedbackText" class="w-full border p-2 rounded-md" placeholder="Write feedback..."></textarea>
+          <div class="flex justify-between mt-2">
+            <select id="rating" class="border p-2 rounded-md">
+              <option value="5">⭐️⭐️⭐️⭐️⭐️</option>
+              <option value="4">⭐️⭐️⭐️⭐️</option>
+              <option value="3">⭐️⭐️⭐️</option>
+              <option value="2">⭐️⭐️</option>
+              <option value="1">⭐️</option>
+            </select>
+            <button id="sendFeedback" class="px-3 py-2 bg-green-600 text-white rounded-md">Send</button>
+          </div>
+          <div id="feedbackList" class="mt-3 text-sm"></div>
+        </div>
+      </section>
+
+      <!-- VENDOR -->
+      <section id="vendorView" class="hidden">
+        <div class="grid grid-cols-3 gap-6">
+          <div class="col-span-2 card p-4">
+            <h3 class="font-medium">Incoming Orders</h3>
+            <div id="vendorOrders" class="mt-3 space-y-3"></div>
+          </div>
+          <div class="card p-4">
+            <h3 class="font-medium">Analytics</h3>
+            <div class="mt-3">
+              <canvas id="salesChart" height="140"></canvas>
+            </div>
+            <div class="mt-4 muted text-sm">Total Orders: <span id="vTotal">0</span> • Sales: ₹<span id="vSales">0</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ADMIN -->
+      <section id="adminView" class="hidden">
+        <div class="grid grid-cols-3 gap-6">
+          <div class="card p-4">
+            <h3 class="font-medium">Admin — Shops</h3>
+            <div id="adminShops" class="mt-3"></div>
+            <div class="mt-3">
+              <button id="createShopBtn" class="px-3 py-2 bg-green-600 text-white rounded-md">Create Shop</button>
+            </div>
+
+            <div class="mt-6">
+              <h4 class="font-medium">Upload Logo (branding)</h4>
+              <div class="mt-2">
+                <input type="file" id="logoUploader" accept="image/*" />
+                <div class="muted text-sm mt-2">Uploaded logo used in header, footer and QR modal.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-span-2 card p-4">
+            <h3 class="font-medium">Manage Menu</h3>
+            <div class="mt-3 grid grid-cols-2 gap-4">
+              <input id="mName" placeholder="Name" class="p-2 border rounded-md" />
+              <input id="mPrice" placeholder="Price" class="p-2 border rounded-md" />
+              <input id="mStock" placeholder="Stock" class="p-2 border rounded-md" />
+              <input id="mImg" placeholder="Image URL (optional)" class="p-2 border rounded-md" />
+              <input type="file" id="mUpload" accept="image/*" />
+              <select id="mShop" class="p-2 border rounded-md"></select>
+              <div class="col-span-2 flex gap-2">
+                <button id="saveMenuBtn" class="px-3 py-2 bg-indigo-600 text-white rounded-md">Save</button>
+                <button id="clearMenuBtn" class="px-3 py-2 bg-white border rounded-md">Clear</button>
+              </div>
+            </div>
+
+            <div class="mt-6">
+              <h4 class="font-medium">All Menu Items</h4>
+              <div id="allMenuList" class="mt-3 grid grid-cols-3 gap-3"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- QR Modal -->
+  <div id="qrModal" class="fixed inset-0 bg-black/40 hidden items-center justify-center">
+    <div class="bg-white p-6 rounded-xl card w-96">
+      <div class="flex items-center gap-3">
+        <img id="qrLogo" src="" class="h-10 w-10 rounded" alt="logo" />
+        <h3 class="font-semibold">Pickup QR — Show at counter</h3>
+      </div>
+      <div id="qrHolder" class="mt-4 flex justify-center"></div>
+      <div class="mt-4 text-center muted" id="qrTokenText"></div>
+      <div class="mt-4 flex justify-end">
+        <button id="closeQr" class="px-3 py-2 bg-indigo-600 text-white rounded-md">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- UPI Modal -->
+  <div id="upiModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center">
+    <div class="bg-white p-6 rounded-xl card w-96">
+      <div class="flex items-center gap-3">
+        <img id="upiLogo" src="" class="h-10 w-10 rounded" alt="logo" />
+        <h3 class="font-semibold">Pay by UPI (Demo)</h3>
+      </div>
+      <div class="mt-3 text-sm">Scan this QR with Google Pay / PhonePe / Paytm to pay the exact amount (demo).</div>
+      <div id="upiQrHolder" class="mt-4 flex justify-center"></div>
+      <div class="mt-3 text-center muted" id="upiDetails"></div>
+      <div class="mt-4 flex justify-between">
+        <button id="simulatePaid" class="px-3 py-2 bg-green-600 text-white rounded-md">Simulate Payment</button>
+        <button id="closeUpi" class="px-3 py-2 bg-white border rounded-md">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CHATBOT -->
+  <div id="chatbot" class="fixed bottom-4 right-4">
+    <button id="chatBtn" class="bg-indigo-600 text-white p-3 rounded-full shadow-lg">💬</button>
+    <div id="chatWindow" class="hidden w-80 h-96 bg-white shadow-xl rounded-xl p-3">
+      <div id="chatMessages" class="h-72 overflow-y-auto text-sm"></div>
+      <input id="chatInput" placeholder="Ask something... (timing, menu, status)" class="w-full border p-2 rounded-md mt-2"/>
+    </div>
+  </div>
+
+  <footer class="bg-indigo-600 text-white text-center p-3 mt-6">
+    <div class="flex justify-center items-center space-x-2">
+      <img id="footerLogo" src="" alt="Footer Logo" class="w-8 h-8 rounded-full hidden" />
+      <span>© 2025 Digital CGC Food Hub</span>
+    </div>
+  </footer>
+
+  <script>
+  // ---------- localStorage keys ----------
+  const LS = { SHOPS:'pro_shops_full', MENU:'pro_menu_full', ORDERS:'pro_orders_full', WALLET:'pro_wallet_full', ACT:'pro_activity_full', FEEDBACK:'pro_feedback_full', GALLERY:'pro_gallery_full', BRAND:'pro_brand_full' };
+
+  // ---------- default demo data ----------
+  const DEFAULT_SHOPS = [
+    {id:'s1',name:'Kulhad',type:'Cafe',logo:'☕',img:''},
+    {id:'s2',name:'Sip N Bite',type:'Bakery',logo:'🥐',img:''},
+    {id:'s3',name:'Yum Experts',type:'Canteen',logo:'🍛',img:''}
+  ];
+  const DEFAULT_MENU = [
+    {id:'m1',shop:'s1',name:'Normal Chai',price:15,stock:50,logo:'☕',img:''},
+    {id:'m2',shop:'s1',name:'Masala Chai',price:30,stock:40,logo:'☕',img:''},
+    {id:'m3',shop:'s2',name:'Butter Croissant',price:60,stock:20,logo:'🥐',img:''},
+    {id:'m4',shop:'s3',name:'Cold Coffee',price:40,stock:25,logo:'🥤',img:''},
+    {id:'m5',shop:'s3',name:'Veg Thali',price:120,stock:10,logo:'🍛',img:''}
+  ];
+
+  // ---------- helpers ----------
+  const read = (k,f)=>{ try{const r=localStorage.getItem(k); return r?JSON.parse(r):f;}catch(e){return f;} };
+  const write = (k,v)=>localStorage.setItem(k,JSON.stringify(v));
+
+  let SHOPS = read(LS.SHOPS, DEFAULT_SHOPS);
+  let MENU = read(LS.MENU, DEFAULT_MENU);
+  let ORDERS = read(LS.ORDERS, []);
+  let WALLET = read(LS.WALLET, {balance:200});
+  let ACTIVITY = read(LS.ACT, []);
+  let FEEDBACK = read(LS.FEEDBACK, []);
+  let GALLERY = read(LS.GALLERY, []);
+  let BRAND = read(LS.BRAND, {logo:null});
+
+  // ---------- state ----------
+  let SELECTED_SHOP = SHOPS[0]?.id || null;
+  let CART = {};
+  let TOKEN = ORDERS.length ? Math.max(...ORDERS.map(o=>o.token)) : 1000;
+  let PENDING_UPI = null;
+
+  // ---------- refs ----------
+  const studentBtn = document.getElementById('studentBtn');
+  const vendorBtn = document.getElementById('vendorBtn');
+  const adminBtn = document.getElementById('adminBtn');
+  const studentView = document.getElementById('studentView');
+  const vendorView = document.getElementById('vendorView');
+  const adminView = document.getElementById('adminView');
+
+  const shopFilters = document.getElementById('shopFilters');
+  const menuGrid = document.getElementById('menuGrid');
+  const selectedShopName = document.getElementById('selectedShopName');
+  const cartList = document.getElementById('cartList');
+  const cartTotal = document.getElementById('cartTotal');
+  const placeOrderBtn = document.getElementById('placeOrderBtn');
+  const activityLog = document.getElementById('activityLog');
+  const queueTokens = document.getElementById('queueTokens');
+  const walletBal = document.getElementById('walletBal');
+  const rechargeBtn = document.getElementById('rechargeBtn');
+  const rechargeAmt = document.getElementById('rechargeAmt');
+  const couponInput = document.getElementById('couponInput');
+  const applyCoupon = document.getElementById('applyCoupon');
+  const paymentMode = document.getElementById('paymentMode');
+
+  const vendorOrders = document.getElementById('vendorOrders');
+  const salesChartCtx = document.getElementById('salesChart').getContext('2d');
+  let salesChart;
+
+  const adminShops = document.getElementById('adminShops');
+  const mName = document.getElementById('mName');
+  const mPrice = document.getElementById('mPrice');
+  const mStock = document.getElementById('mStock');
+  const mImg = document.getElementById('mImg');
+  const mUpload = document.getElementById('mUpload');
+  const mShop = document.getElementById('mShop');
+  const saveMenuBtn = document.getElementById('saveMenuBtn');
+  const allMenuList = document.getElementById('allMenuList');
+
+  const qrModal = document.getElementById('qrModal');
+  const qrHolder = document.getElementById('qrHolder');
+  const qrTokenText = document.getElementById('qrTokenText');
+  const closeQr = document.getElementById('closeQr');
+  const qrLogo = document.getElementById('qrLogo');
+
+  const upiModal = document.getElementById('upiModal');
+  const upiQrHolder = document.getElementById('upiQrHolder');
+  const upiDetails = document.getElementById('upiDetails');
+  const simulatePaid = document.getElementById('simulatePaid');
+  const closeUpi = document.getElementById('closeUpi');
+  const upiLogo = document.getElementById('upiLogo');
+
+  const galleryUpload = document.getElementById('galleryUpload');
+  const galleryCarousel = document.getElementById('galleryCarousel');
+
+  const uploadLogoBtn = document.getElementById('uploadLogoBtn');
+  const logoInput = document.getElementById('logoInput');
+  const brandLogoEl = document.getElementById('brandLogo');
+  const footerLogoEl = document.getElementById('footerLogo');
+  const logoUploader = document.getElementById('logoUploader');
+
+  const chatBtn = document.getElementById('chatBtn');
+  const chatWindow = document.getElementById('chatWindow');
+  const chatMessages = document.getElementById('chatMessages');
+  const chatInput = document.getElementById('chatInput');
+
+  // ---------- navigation ----------
+  studentBtn.onclick = ()=>{ studentView.classList.remove('hidden'); vendorView.classList.add('hidden'); adminView.classList.add('hidden'); }
+  vendorBtn.onclick = ()=>{ studentView.classList.add('hidden'); vendorView.classList.remove('hidden'); adminView.classList.add('hidden'); renderVendor(); }
+  adminBtn.onclick = ()=>{ studentView.classList.add('hidden'); vendorView.classList.add('hidden'); adminView.classList.remove('hidden'); renderAdmin(); }
+
+  // ---------- render shops filters ----------
+  function renderShopFilters(){
+    shopFilters.innerHTML='';
+    SHOPS.forEach(s=>{
+      const b = document.createElement('button');
+      b.className = `w-full text-left p-3 rounded-md border flex items-center gap-3 ${SELECTED_SHOP===s.id? 'bg-indigo-50':''}`;
+      b.innerHTML = `<div class='text-2xl'>${s.logo||'🍽️'}</div><div><div class='font-medium'>${s.name}</div><div class='muted text-sm'>${s.type}</div></div>`;
+      b.onclick = ()=>{ SELECTED_SHOP = s.id; renderMenu(); renderShopFilters(); };
+      shopFilters.appendChild(b);
+    });
+  }
+
+  // ---------- render menu ----------
+  function renderMenu(){
+    const shop = SHOPS.find(x=>x.id===SELECTED_SHOP);
+    selectedShopName.innerText = shop ? `— ${shop.name}` : '';
+    const items = MENU.filter(m=>m.shop===SELECTED_SHOP);
+    menuGrid.innerHTML = items.length ? '' : '<div class="muted">No items for this shop. Admin can add.</div>';
+    items.forEach(it=>{
+      const image = it.img || 'https://via.placeholder.com/400x300?text=No+Image';
+      const c = document.createElement('div'); c.className='card p-3';
+      c.innerHTML = `<div class="item-img" style="background-image:url('${image}')"></div>
+        <div class="mt-3 flex items-center justify-between"><div class='flex items-center gap-2'><div class='text-2xl'>${it.logo||'🍽️'}</div><div><div class='font-medium'>${it.name}</div><div class='muted text-sm'>₹${it.price} • stock ${it.stock}</div></div></div><div class='text-sm'>${(SHOPS.find(s=>s.id===it.shop)||{}).name||''}</div></div>
+        <div class="mt-3 flex justify-between items-center"><div class="muted text-sm">Qty</div><div class="flex items-center gap-2"><button class="px-2 py-1 border rounded-md" data-minus="${it.id}">-</button><div id="q-${it.id}">0</div><button class="px-2 py-1 border rounded-md" data-plus="${it.id}">+</button></div></div>`;
+      menuGrid.appendChild(c);
+      c.querySelector('[data-plus]').onclick = ()=>{ addToCart(it); document.getElementById('q-'+it.id).innerText = CART[it.id]?.qty||1; };
+      c.querySelector('[data-minus]').onclick = ()=>{ removeFromCart(it); document.getElementById('q-'+it.id).innerText = CART[it.id]?.qty||0; };
+    });
+    renderCart();
+  }
+
+  // ---------- cart ----------
+  function addToCart(item){ if(item.stock<=0){ alert('Out of stock'); return; } if(!CART[item.id]) CART[item.id] = {...item, qty:0}; CART[item.id].qty++; renderCart(); }
+  function removeFromCart(item){ if(!CART[item.id]) return; CART[item.id].qty--; if(CART[item.id].qty<=0) delete CART[item.id]; renderCart(); }
+
+  function renderCart(){
+    const arr = Object.values(CART);
+    if(arr.length===0){ cartList.innerHTML = '<div class="muted">Cart is empty</div>'; cartTotal.innerText='0'; placeOrderBtn.disabled=true; return; }
+    let html = '<div class="space-y-2">'; let total=0;
+    arr.forEach(it=>{ total += it.price*it.qty; html += `<div class="flex justify-between items-center"><div><div class="font-medium">${it.name}</div><div class="muted text-sm">₹${it.price} x ${it.qty}</div></div><div class="flex gap-2"><button class="px-2 py-1 border rounded-md" onclick="decQty('${it.id}')">-</button><div class="px-2">${it.qty}</div><button class="px-2 py-1 border rounded-md" onclick="incQty('${it.id}')">+</button></div></div>`; });
+    const coupon = (couponInput.value||'').trim().toUpperCase(); let disc=0; if(coupon==='CGC10') disc=0.1; if(coupon==='CGC20' && total>=200) disc=0.2;
+    const discAmt = Math.round(total*disc); const finalTotal = total - discAmt;
+    html += `</div><div class="mt-3">Subtotal: ₹${total} ${discAmt?`<div class="text-green-600">Discount: -₹${discAmt}</div>`:''}<div class="mt-2 font-semibold">Final: ₹${finalTotal}</div></div>`;
+    cartList.innerHTML = html; cartTotal.innerText = finalTotal; placeOrderBtn.disabled=false;
+  }
+
+  window.incQty = (id)=>{ if(CART[id]) CART[id].qty++; renderCart(); }
+  window.decQty = (id)=>{ if(CART[id]){ CART[id].qty--; if(CART[id].qty<=0) delete CART[id]; renderCart(); } }
+
+  applyCoupon.onclick = ()=>{ renderCart(); }
+
+  // ---------- wallet ----------
+  rechargeBtn.onclick = ()=>{ const v = Number(rechargeAmt.value)||0; if(v<=0){ alert('Enter amount'); return;} WALLET.balance = (WALLET.balance||0)+v; write(LS.WALLET, WALLET); rechargeAmt.value=''; renderWallet(); }
+  function renderWallet(){ walletBal.innerText = WALLET.balance||0; }
+
+  // ---------- place order with UPI simulation ----------
+  placeOrderBtn.onclick = ()=>{
+    const items = Object.values(CART); if(items.length===0) return;
+    for(const it of items){ const m = MENU.find(x=>x.id===it.id); if(!m || m.stock < it.qty){ alert(`${it.name} stock insufficient`); return; } }
+    const subtotal = items.reduce((s,i)=>s+i.price*i.qty,0);
+    const coupon = (couponInput.value||'').trim().toUpperCase(); let disc=0; if(coupon==='CGC10') disc=0.1; if(coupon==='CGC20' && subtotal>=200) disc=0.2;
+    const discAmt=Math.round(subtotal*disc); const total = subtotal - discAmt;
+
+    const mode = paymentMode.value;
+    if(mode==='wallet'){
+      if(WALLET.balance < total){ if(!confirm('Wallet insufficient — proceed (simulate external payment)?')) return; } else { WALLET.balance -= total; write(LS.WALLET, WALLET); renderWallet(); createOrder(items, total); }
+    } else if(mode==='upi'){
+      TOKEN++; const token = TOKEN;
+      const upiPayload = `upi://pay?pa=cgcfoodhub@upi&pn=CGC+FoodHub&am=${total}&tn=Order+${token}`;
+      upiDetails.innerText = `Order #${token} • Amount: ₹${total}`;
+      upiQrHolder.innerHTML=''; QRCode.toCanvas(upiPayload, {width:200}, function(err,canvas){ if(err){ upiQrHolder.innerText='Unable to generate QR'; } else { upiQrHolder.appendChild(canvas); }});
+      PENDING_UPI = { items, total, token };
+      upiModal.classList.remove('hidden');
+      // show brand logo in UPI modal if set
+      upiLogo.src = BRAND.logo || '';
+      if(BRAND.logo) upiLogo.classList.remove('hidden');
+    }
+  }
+
+  // simulate UPI payment confirmed
+  simulatePaid.onclick = ()=>{
+    if(!PENDING_UPI) return;
+    createOrder(PENDING_UPI.items, PENDING_UPI.total, PENDING_UPI.token);
+    PENDING_UPI = null; upiModal.classList.add('hidden');
+  }
+  closeUpi.onclick = ()=>{ PENDING_UPI = null; upiModal.classList.add('hidden'); TOKEN--; }
+
+  // create order (common)
+  function createOrder(items, total, forcedToken){
+    MENU = MENU.map(m=>{ const c=items.find(x=>x.id===m.id); if(c) return {...m, stock: m.stock - c.qty}; return m; }); write(LS.MENU, MENU);
+    const token = forcedToken || (TOKEN++);
+    const order = { token, items: items.map(i=>({id:i.id,name:i.name,qty:i.qty,price:i.price})), total, status:'Placed', shop: items[0].shop, time:Date.now(), lat:28.677, lng:77.243 };
+    ORDERS.push(order); write(LS.ORDERS, ORDERS);
+    ACTIVITY.unshift(`${new Date().toLocaleTimeString()} — Order #${order.token} placed`); if(ACTIVITY.length>50) ACTIVITY.pop(); write(LS.ACT, ACTIVITY);
+    CART = {}; renderMenu(); renderCart(); renderActivity(); renderQueue(); renderVendor(); showQr(order.token);
+  }
+
+  function renderActivity(){ activityLog.innerHTML = ACTIVITY.length ? ACTIVITY.join('<br/>') : '<div class="muted">No recent activity</div>'; }
+
+  function renderQueue(){ const q = ORDERS.filter(o=>o.status!=='Completed').sort((a,b)=>a.token-b.token).slice(0,8); queueTokens.innerHTML = q.length? q.map(x=>`#${x.token} • ${x.status} (${x.items.length} items)`).join('<br/>') : '<div class="muted">No waiting orders</div>'; }
+
+  // ---------- vendor ----------
+  function renderVendor(){ vendorOrders.innerHTML=''; const list = ORDERS.slice().reverse(); list.forEach(o=>{
+    const d=document.createElement('div'); d.className='p-3 rounded-md border';
+    d.innerHTML = `<div class="flex justify-between"><div><b>Token #${o.token}</b><div class="muted text-sm">${o.items.map(i=>i.name+' x'+i.qty).join(', ')}</div></div><div><div class="muted text-sm">₹${o.total}</div><div class="mt-2 flex gap-2"><button class="px-2 py-1 bg-indigo-600 text-white rounded-md" onclick="advance(${o.token})">Next</button><button class="px-2 py-1 border rounded-md" onclick="cancel(${o.token})">Cancel</button></div></div></div>`;
+    vendorOrders.appendChild(d);
+  }); renderAnalytics(); }
+
+  window.advance = (token)=>{ ORDERS = ORDERS.map(o=>{ if(Number(o.token)===Number(token)){ const seq=['Placed','Cooking','Ready','Out for Pickup','Completed']; const idx = seq.indexOf(o.status); o.status = seq[Math.min(seq.length-1, idx+1)]; o.time = Date.now(); ACTIVITY.unshift(`${new Date().toLocaleTimeString()} — Token #${o.token} is ${o.status}`); if(ACTIVITY.length>50) ACTIVITY.pop(); write(LS.ACT, ACTIVITY);
+      if(o.status==='Out for Pickup'){ o.lat = 28.678 + Math.random()*0.01; o.lng = 77.244 + Math.random()*0.01; }
+    } return o; }); write(LS.ORDERS, ORDERS); renderVendor(); renderQueue(); updateDeliveryMarker(); }
+
+  window.cancel = (token)=>{ if(!confirm('Cancel order?')) return; ORDERS = ORDERS.filter(o=>Number(o.token)!==Number(token)); write(LS.ORDERS, ORDERS); renderVendor(); renderQueue(); }
+
+  // ---------- analytics ----------
+  function renderAnalytics(){ const total = ORDERS.length; const sales = ORDERS.reduce((s,o)=>s+o.total,0); document.getElementById('vTotal').innerText = total; document.getElementById('vSales').innerText = sales;
+    const byDay = {}; ORDERS.forEach(o=>{ const d = new Date(o.time).toLocaleDateString(); byDay[d] = (byDay[d]||0)+o.total; }); const labels = Object.keys(byDay); const data = Object.values(byDay);
+    if(salesChart) salesChart.destroy();
+    salesChart = new Chart(salesChartCtx, { type:'line', data:{ labels, datasets:[{ label:'Sales (₹)', data, tension:0.3, fill:false }] }, options:{ responsive:true, plugins:{ legend:{ display:false } } } });
+  }
+
+  // ---------- admin ----------
+  function renderAdmin(){ adminShops.innerHTML=''; SHOPS.forEach(s=>{ const d=document.createElement('div'); d.className='flex items-center justify-between p-2 border rounded-md mb-2'; d.innerHTML = `<div><b>${s.name}</b><div class="muted text-sm">${s.type}</div></div><div class="flex gap-2"><button class="px-2 py-1 border rounded-md" onclick="editShop('${s.id}')">Edit</button><button class="px-2 py-1 border rounded-md" onclick="delShop('${s.id}')">Delete</button></div>`; adminShops.appendChild(d); }); populateShopSelect(); renderAllMenuAdmin(); }
+
+  window.editShop = (id)=>{ const s = SHOPS.find(x=>x.id===id); const name = prompt('Shop name', s.name); if(!name) return; s.name = name; write(LS.SHOPS, SHOPS); renderAdmin(); renderShopFilters(); }
+  window.delShop = (id)=>{ if(!confirm('Delete shop and its items?')) return; SHOPS = SHOPS.filter(x=>x.id!==id); MENU = MENU.filter(m=>m.shop!==id); write(LS.SHOPS, SHOPS); write(LS.MENU, MENU); renderAdmin(); renderShopFilters(); }
+
+  document.getElementById('createShopBtn').onclick = ()=>{ const name = prompt('Shop name'); if(!name) return; const id = 's'+Date.now().toString().slice(-4); SHOPS.push({id,name,type:'Canteen',logo:'🍽️',img:''}); write(LS.SHOPS, SHOPS); renderAdmin(); renderShopFilters(); }
+
+  function populateShopSelect(){ mShop.innerHTML=''; SHOPS.forEach(s=>{ const o=document.createElement('option'); o.value=s.id; o.innerText = s.name; mShop.appendChild(o); }); }
+
+  saveMenuBtn.onclick = ()=>{ const name = mName.value.trim(); const price = Number(mPrice.value)||0; const stock = Number(mStock.value)||0; const imgUrl = mImg.value.trim(); const shop = mShop.value; const uploadFile = mUpload.files[0];
+    if(!name||!price||!shop){ alert('Name, price, shop required'); return;}
+    const id = 'm'+Date.now().toString().slice(-5);
+    if(uploadFile){
+      const reader = new FileReader();
+      reader.onload = ()=>{ MENU.push({id,shop,name,price,stock,logo:'🍽️',img: reader.result}); write(LS.MENU, MENU); mName.value=''; mPrice.value=''; mStock.value=''; mImg.value=''; mUpload.value=''; renderAllMenuAdmin(); renderMenu(); };
+      reader.readAsDataURL(uploadFile);
+    } else {
+      MENU.push({id,shop,name,price,stock,logo:'🍽️',img: imgUrl || ''});
+      write(LS.MENU, MENU); mName.value=''; mPrice.value=''; mStock.value=''; mImg.value=''; mUpload.value=''; renderAllMenuAdmin(); renderMenu();
+    }
+  }
+
+  function renderAllMenuAdmin(){ allMenuList.innerHTML=''; MENU.forEach(m=>{ const c=document.createElement('div'); c.className='p-2 border rounded-md'; c.innerHTML = `<div class="font-medium">${m.name}</div><div class="muted text-sm">${(SHOPS.find(s=>s.id===m.shop)||{}).name} • ₹${m.price}</div><div class="mt-2 flex gap-2"><button class="px-2 py-1 border rounded-md" onclick="delMenu('${m.id}')">Delete</button></div>`; allMenuList.appendChild(c); }); }
+  window.delMenu = (id)=>{ if(!confirm('Delete item?')) return; MENU = MENU.filter(m=>m.id!==id); write(LS.MENU, MENU); renderAllMenuAdmin(); renderMenu(); }
+
+  // ---------- QR ----------
+  function showQr(token){ qrModal.classList.remove('hidden'); qrHolder.innerHTML=''; qrTokenText.innerText = 'Token #'+token; QRCode.toDataURL(String(token)).then(url=>{ const img = document.createElement('img'); img.src=url; img.className='mx-auto'; qrHolder.appendChild(img); }); // brand logo in qr modal
+    qrLogo.src = BRAND.logo || ''; if(BRAND.logo) qrLogo.classList.remove('hidden');
+  }
+  closeQr.onclick = ()=>{ qrModal.classList.add('hidden'); }
+
+  // ---------- feedback ----------
+  const feedbackListEl = document.getElementById('feedbackList');
+  document.getElementById('sendFeedback').onclick=()=>{ const txt=document.getElementById('feedbackText').value.trim(); const r=document.getElementById('rating').value; if(!txt) return alert('Please enter feedback'); FEEDBACK.unshift({text:txt, rating:r, time:Date.now()}); if(FEEDBACK.length>50) FEEDBACK.pop(); write(LS.FEEDBACK, FEEDBACK); document.getElementById('feedbackText').value=''; renderFeedback(); }
+  function renderFeedback(){ feedbackListEl.innerHTML = FEEDBACK.length ? FEEDBACK.map(f=>`<div class='border-b py-1'>⭐${f.rating} • ${new Date(f.time).toLocaleString()}<div class='muted text-sm'>${f.text}</div></div>`).join('') : '<div class=\"muted\">No feedback yet</div>'; }
+
+  // ---------- gallery ----------
+  galleryUpload.addEventListener("change",()=>{
+    [...galleryUpload.files].forEach(file=>{
+      const reader = new FileReader();
+      reader.onload=()=>{
+        GALLERY.unshift(reader.result); // show newest first
+        if(GALLERY.length>50) GALLERY.pop();
+        write(LS.GALLERY, GALLERY);
+        renderGallery();
+      };
+      reader.readAsDataURL(file);
+    });
+  });
+
+  function renderGallery(){
+    galleryCarousel.innerHTML='';
+    if(!GALLERY.length){ galleryCarousel.innerHTML = '<div class="muted">No gallery images</div>'; return; }
+    GALLERY.forEach(src=>{
+      const img=document.createElement('img'); img.src=src; galleryCarousel.appendChild(img);
+    });
+  }
+
+  // Auto slideshow (move first to end every 3s)
+  setInterval(()=>{ if(galleryCarousel.children.length>1){ galleryCarousel.appendChild(galleryCarousel.children[0]); } },3000);
+
+  // ---------- delivery map (Leaflet) ----------
+  const map = L.map('map', { zoomControl:false }).setView([28.677,77.243], 15);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+  let deliveryMarker = L.marker([28.677,77.243]).addTo(map).bindPopup('Delivery partner');
+
+  function updateDeliveryMarker(){ const active = ORDERS.find(o=>o.status==='Out for Pickup'); if(active){ deliveryMarker.setLatLng([active.lat||28.677, active.lng||77.243]); map.panTo([active.lat||28.677, active.lng||77.243]); } }
+
+  // ---------- chatbot ----------
+  chatBtn.onclick = ()=>chatWindow.classList.toggle('hidden');
+  chatInput.addEventListener('keypress',e=>{
+    if(e.key==='Enter'){
+      const q=e.target.value.trim(); if(!q) return;
+      const mq=q.toLowerCase(); let a='Maaf — main samajh nahi paaya.';
+      if(mq.includes('tim')||mq.includes('open')||mq.includes('time')) a='Canteen timings: 9:00 AM — 7:00 PM';
+      else if(mq.includes('menu')) a='Browse the menu on the left. Click + to add items to cart.';
+      else if(mq.includes('status')||mq.includes('token')) a='Go to Queue/Token for live order updates, or Vendor view to advance status.';
+      else if(mq.includes('feedback')) a='Use the Feedback box to send reviews; admins can view them.';
+      else if(mq.includes('map')||mq.includes('delivery')) a='Open Delivery Map to see simulated delivery partner location.';
+      chatMessages.innerHTML += `<div class="chat-bubble"><b>You:</b> ${q}</div><div class="chat-bubble text-green-700"><b>Bot:</b> ${a}</div>`;
+      chatMessages.scrollTop = chatMessages.scrollHeight; e.target.value='';
+    }
+  });
+
+  // ---------- logo upload (header/footer + admin) ----------
+  uploadLogoBtn.onclick = ()=>logoInput.click();
+  logoInput.addEventListener('change',()=>{
+    const file=logoInput.files[0];
+    if(!file) return;
+    const reader=new FileReader();
+    reader.onload=()=>{
+      BRAND.logo = reader.result; write(LS.BRAND, BRAND); applyBrand();
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // Admin logo uploader (in admin panel)
+  logoUploader && logoUploader.addEventListener('change',()=>{
+    const file = logoUploader.files[0]; if(!file) return;
+    const reader = new FileReader(); reader.onload=()=>{ BRAND.logo = reader.result; write(LS.BRAND, BRAND); applyBrand(); }; reader.readAsDataURL(file);
+  });
+
+  function applyBrand(){
+    if(BRAND.logo){
+      brandLogoEl.src = BRAND.logo; brandLogoEl.classList.remove('hidden');
+      footerLogoEl.src = BRAND.logo; footerLogoEl.classList.remove('hidden');
+      qrLogo.src = BRAND.logo; qrLogo.classList.remove('hidden');
+      upiLogo.src = BRAND.logo; upiLogo.classList.remove('hidden');
+    } else {
+      brandLogoEl.classList.add('hidden'); footerLogoEl.classList.add('hidden'); qrLogo.classList.add('hidden'); upiLogo.classList.add('hidden');
+    }
+  }
+
+  // ---------- feedback render (called in init) ----------
+  function renderFeedback(){ feedbackListEl.innerHTML = FEEDBACK.length ? FEEDBACK.map(f=>`<div class='border-b py-1'>⭐${f.rating} • ${new Date(f.time).toLocaleString()}<div class='muted text-sm'>${f.text}</div></div>`).join('') : '<div class=\"muted\">No feedback yet</div>'; }
+
+  // ---------- init & boot ----------
+  function init(){
+    // ensure persistent defaults
+    SHOPS = read(LS.SHOPS, DEFAULT_SHOPS);
+    MENU = read(LS.MENU, DEFAULT_MENU);
+    ORDERS = read(LS.ORDERS, []);
+    WALLET = read(LS.WALLET, {balance:200});
+    ACTIVITY = read(LS.ACT, []);
+    FEEDBACK = read(LS.FEEDBACK, []);
+    GALLERY = read(LS.GALLERY, []);
+    BRAND = read(LS.BRAND, {logo:null});
+
+    renderShopFilters(); renderMenu(); renderCart(); renderWallet(); renderActivity(); renderQueue(); renderVendor(); renderAdmin(); renderAllMenuAdmin(); renderGallery(); renderFeedback(); applyBrand(); updateDeliveryMarker(); renderAnalytics();
+  }
+
+  function renderWallet(){ walletBal.innerText = WALLET.balance||0; }
+  function renderActivity(){ activityLog.innerHTML = ACTIVITY.length ? ACTIVITY.join('<br/>') : '<div class=\"muted\">No recent activity</div>'; }
+  function renderGallery(){ renderGallery = ()=>{} /* placeholder to avoid redeclare */; } // replaced below
+
+  // fix renderGallery actual definition
+  function renderGallery(){
+    galleryCarousel.innerHTML='';
+    if(!GALLERY.length){ galleryCarousel.innerHTML = '<div class="muted">No gallery images</div>'; return; }
+    GALLERY.forEach(src=>{
+      const img=document.createElement('img'); img.src=src; galleryCarousel.appendChild(img);
+    });
+  }
+
+  // ---------- periodic refresh (simulate realtime) ----------
+  setInterval(()=>{ ORDERS = read(LS.ORDERS, ORDERS); ACTIVITY = read(LS.ACT, ACTIVITY); renderVendor(); renderQueue(); renderAnalytics(); renderActivity(); renderFeedback(); updateDeliveryMarker(); }, 2000);
+
+  // expose dec/inc for cart controls
+  window.incQty = (id)=>{ if(CART[id]) CART[id].qty++; renderCart(); }
+  window.decQty = (id)=>{ if(CART[id]){ CART[id].qty--; if(CART[id].qty<=0) delete CART[id]; renderCart(); } }
+
+  // ---------- start ----------
+  init();
+
+  </script>
+</body>
+</html>
